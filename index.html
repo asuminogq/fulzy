@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DownDetector & Web Crawler</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(to bottom right, #ff7e5f, #feb47b);
+            color: #fff;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+        }
+
+        .container {
+            text-align: center;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        #serviceInput {
+            padding: 10px;
+            font-size: 1.2em;
+            border: none;
+            border-radius: 5px;
+            width: 300px;
+            margin-bottom: 20px;
+        }
+
+        #checkButton, #crawlButton {
+            padding: 10px 20px;
+            background-color: #fff;
+            color: #ff7e5f;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.2em;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        #status {
+            margin-top: 20px;
+            font-size: 1.5em;
+            opacity: 0;
+            max-width: 400px;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>DownDetector & Web Crawler</h1>
+        <input type="text" id="serviceInput" placeholder="Введите название сервиса">
+        <button id="checkButton">Проверить статус</button>
+        <button id="crawlButton">Запустить Web Crawler</button>
+        <div id="status"></div>
+    </div>
+
+    <script>
+        const services = {
+            'Госуслуги': 'https://www.gosuslugi.ru',
+            'Facebook': 'https://www.facebook.com',
+            'Instagram': 'https://www.instagram.com',
+            'Twitter': 'https://www.twitter.com',
+            'YouTube': 'https://www.youtube.com',
+            'Netflix': 'https://www.netflix.com',
+            'VK': 'https://www.vk.com',
+            'Yandex': 'https://www.yandex.ru',
+            'Odnoklassniki': 'https://www.ok.ru',
+            'Telegram': 'https://telegram.org',
+                      'Sberbank': 'https://www.sberbank.ru',
+            'Tinkoff': 'https://www.tinkoff.ru',
+            'Mail.ru': 'https://mail.ru'
+        };
+
+        async function checkStatus(url) {
+            try {
+                const response = await fetch(url, { method: 'HEAD', mode: 'no-cors' });
+                if (!response.ok) {
+                    return `Проблемы (HTTP статус: ${response.status})`;
+                }
+                return 'Работает корректно';
+            } catch (error) {
+                return 'Сервис недоступен';
+            }
+        }
+
+        document.getElementById('checkButton').addEventListener('click', async function() {
+            const serviceName = document.getElementById('serviceInput').value;
+            const statusDiv = document.getElementById('status');
+            if (services[serviceName]) {
+                const result = await checkStatus(services[serviceName]);
+                statusDiv.innerHTML = `${serviceName}: ${result}`;
+                statusDiv.style.opacity = 1;
+            } else {
+                statusDiv.innerHTML = 'Сервис не найден';
+                statusDiv.style.opacity = 1;
+            }
+        });
+
+        // Web Crawler
+        const fs = require('fs');
+        const axios = require('axios');
+        const cheerio = require('cheerio');
+
+        const visitedUrls = new Set();
+        const resultsFilePath = 'results.txt'; // Путь к файлу для сохранения результатов
+
+        // Функция для записи результатов в текстовый файл
+        function writeToFile(data) {
+            fs.appendFileSync(resultsFilePath, data + '\n', 'utf8');
+        }
+
+        async function crawl(url) {
+            if (visitedUrls.has(url)) {
+                return; // Избегаем повторной обработки
+            }
+            visitedUrls.add(url);
+
+            try {
+                const response = await axios.get(url);
+                const $ = cheerio.load(response.data);
+
+                // Проверка на индексацию
+                const isIndexed = $('meta[name="robots"]').attr('content') !== 'noindex';
+
+                if (!isIndexed) {
+                    console.log(`Не индексируемая страница: ${url}`);
+                    writeToFile(`Не индексируемая страница: ${url}`);
+                }
+
+                // Извлечение всех ссылок на странице
+                const links = [];
+                $('a').each((_, element) => {
+                    const link = $(element).attr('href');
+                    if (link && !visitedUrls.has(link)) {
+                        links.push(link);
+                    }
+                });
+
+                // Рекурсивный вызов для всех найденных ссылок
+                for (const link of links) {
+                    // Проверка, является ли ссылка относительной, если да - преобразуем в абсолютную
+                    const absoluteLink = new URL(link, url).href;
+                    crawl(absoluteLink);
+                }
+            } catch (error) {
+                console.error(`Ошибка при обработке ${url}: ${error.message}`);
+            }
+        }
+
+        document.getElementById('crawlButton').addEventListener('click', function() {
+            const baseUrls = ['https://example.com']; // Начальные URL для краула
+            baseUrls.forEach(url => crawl(url));
+            console.log("Краулер запущен. Результаты будут сохранены в results.txt.");
+        });
+    </script>
+
+</body>
+</html>
